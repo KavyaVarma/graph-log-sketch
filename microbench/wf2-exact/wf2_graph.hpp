@@ -1,9 +1,12 @@
 #ifndef _WF2_GRAPH_HPP_
 #define _WF2_GRAPH_HPP_
 
+#include "galois/graphs/LC_CSR_64_Graph.h"
+#include <ctime>
 #include <limits>
+#include <string>
 
-namespace wk2_exact {
+namespace wf2 {
 
 enum class DATA_TYPES {
   UINT,
@@ -88,8 +91,6 @@ public:
   uint64_t key() { return id; }
 };
 
-}
-
 class ForumEventVertex {
 public:
   uint64_t id;
@@ -133,48 +134,48 @@ public:
 };
 
 class PublicationVertex {
-  public:
-    uint64_t id;
-    time_t   date;
-    uint64_t glbid;
+public:
+  uint64_t id;
+  time_t   date;
+  uint64_t glbid;
 
-    PublicationVertex () {
-      id    = kNullValue<uint64_t>;
-      date  = kNullValue<time_t>;
-      glbid = kNullValue<uint64_t>;
-    }
+  PublicationVertex () {
+    id    = kNullValue<uint64_t>;
+    date  = kNullValue<time_t>;
+    glbid = kNullValue<uint64_t>;
+  }
 
-    PublicationVertex (std::vector <std::string> & tokens) {
-      id    = encode<uint64_t, std::string, UINT>(tokens[5]);
-      date  = encode<time_t, std::string, USDATE>(tokens[7]);
-      glbid = kNullValue<uint64_t>;
-    }
+  PublicationVertex (std::vector <std::string> & tokens) {
+    id    = encode<uint64_t, std::string, UINT>(tokens[5]);
+    date  = encode<time_t, std::string, USDATE>(tokens[7]);
+    glbid = kNullValue<uint64_t>;
+  }
 
-    uint64_t key() { return id; }
+  uint64_t key() { return id; }
 };
 
 class TopicVertex {
-  public:
-    uint64_t id;
-    double   lat;
-    double   lon;
-    uint64_t glbid;
+public:
+  uint64_t id;
+  double   lat;
+  double   lon;
+  uint64_t glbid;
 
-    TopicVertex () {
-      id    = kNullValue<uint64_t>;
-      lat   = kNullValue<double>;
-      lon   = kNullValue<double>;
-      glbid = kNullValue<uint64_t>;
-    }
+  TopicVertex () {
+    id    = kNullValue<uint64_t>;
+    lat   = kNullValue<double>;
+    lon   = kNullValue<double>;
+    glbid = kNullValue<uint64_t>;
+  }
 
-    TopicVertex (std::vector <std::string> & tokens) {
-      id    = encode<uint64_t, std::string, UINT>(tokens[6]);
-      lat   = encode<double, std::string, DOUBLE>(tokens[8]);
-      lon   = encode<double, std::string, DOUBLE>(tokens[9]);
-      glbid = kNullValue<uint64_t>;
-    }
+  TopicVertex (std::vector <std::string> & tokens) {
+    id    = encode<uint64_t, std::string, UINT>(tokens[6]);
+    lat   = encode<double, std::string, DOUBLE>(tokens[8]);
+    lon   = encode<double, std::string, DOUBLE>(tokens[9]);
+    glbid = kNullValue<uint64_t>;
+  }
 
-    uint64_t key() { return id; }
+  uint64_t key() { return id; }
 };
 
 class NoneVertex {
@@ -263,15 +264,15 @@ public:
 
   AuthorEdge (std::vector <std::string> & tokens) {
     if (tokens[4] != "") {
-        author   = encode<uint64_t, std::string, UINT>(tokens[1]);
-        item     = encode<uint64_t, std::string, UINT>(tokens[4]);
-        src_type = PERSON;
-        dst_type = FORUMEVENT;
+      author   = encode<uint64_t, std::string, UINT>(tokens[1]);
+      item     = encode<uint64_t, std::string, UINT>(tokens[4]);
+      src_type = PERSON;
+      dst_type = FORUMEVENT;
     } else {
-        author   = encode<uint64_t, std::string, UINT>(tokens[1]);
-        item     = encode<uint64_t, std::string, UINT>(tokens[5]);
-        src_type = PERSON;
-        dst_type = PUBLICATION;
+      author   = encode<uint64_t, std::string, UINT>(tokens[1]);
+      item     = encode<uint64_t, std::string, UINT>(tokens[5]);
+      src_type = PERSON;
+      dst_type = PUBLICATION;
     } 
   }
 
@@ -281,93 +282,93 @@ public:
 };
 
 class IncludesEdge {
-  public:
-    uint64_t forum;            // vertex id
-    uint64_t forum_event;      // vertex id
-    TYPES    src_type;
-    TYPES    dst_type;
+public:
+  uint64_t forum;            // vertex id
+  uint64_t forum_event;      // vertex id
+  TYPES    src_type;
+  TYPES    dst_type;
 
-    IncludesEdge () {
-      forum       = kNullValue<uint64_t>;
-      forum_event = kNullValue<uint64_t>;
-      src_type    = NONE;
-      dst_type    = NONE;
-    }
+  IncludesEdge () {
+    forum       = kNullValue<uint64_t>;
+    forum_event = kNullValue<uint64_t>;
+    src_type    = NONE;
+    dst_type    = NONE;
+  }
 
-    IncludesEdge (std::vector <std::string> & tokens) {
-      forum       = encode<uint64_t, std::string, UINT>(tokens[3]);
-      forum_event = encode<uint64_t, std::string, UINT>(tokens[4]);
-      src_type    = FORUM;
-      dst_type    = FORUMEVENT;
-    }
+  IncludesEdge (std::vector <std::string> & tokens) {
+    forum       = encode<uint64_t, std::string, UINT>(tokens[3]);
+    forum_event = encode<uint64_t, std::string, UINT>(tokens[4]);
+    src_type    = FORUM;
+    dst_type    = FORUMEVENT;
+  }
 
-    uint64_t key() { return forum; }
-    uint64_t src() { return forum; }
-    uint64_t dst() { return forum_event; }
+  uint64_t key() { return forum; }
+  uint64_t src() { return forum; }
+  uint64_t dst() { return forum_event; }
 };
 
 class HasTopicEdge {
-  public:
-    uint64_t item;      // vertex id
-    uint64_t topic;     // vertex id
-    TYPES    src_type;
-    TYPES    dst_type;
- 
-    HasTopicEdge () {
-      item     = kNullValue<uint64_t>;
-      topic    = kNullValue<uint64_t>;
-      src_type = NONE;
-      dst_type = NONE;
-    }
+public:
+  uint64_t item;      // vertex id
+  uint64_t topic;     // vertex id
+  TYPES    src_type;
+  TYPES    dst_type;
 
-    HasTopicEdge (std::vector <std::string> & tokens) {
-      if (tokens[3] != "") {
-         item     = encode<uint64_t, std::string, UINT>(tokens[3]);
-         topic    = encode<uint64_t, std::string, UINT>(tokens[6]);
-         src_type = FORUM;
-         dst_type = TOPIC;
-      } else if (tokens[4] != "") {
-         item     = encode<uint64_t, std::string, UINT>(tokens[4]);
-         topic    = encode<uint64_t, std::string, UINT>(tokens[6]);
-         src_type = FORUMEVENT;
-         dst_type = TOPIC;
-      } else {
-         item     = encode<uint64_t, std::string, UINT>(tokens[5]);
-         topic    = encode<uint64_t, std::string, UINT>(tokens[6]);
-         src_type = PUBLICATION;
-         dst_type = TOPIC;
-    } }
+  HasTopicEdge () {
+    item     = kNullValue<uint64_t>;
+    topic    = kNullValue<uint64_t>;
+    src_type = NONE;
+    dst_type = NONE;
+  }
 
-    uint64_t key() { return item; }
-    uint64_t src() { return item; }
-    uint64_t dst() { return topic; }
+  HasTopicEdge (std::vector <std::string> & tokens) {
+    if (tokens[3] != "") {
+      item     = encode<uint64_t, std::string, UINT>(tokens[3]);
+      topic    = encode<uint64_t, std::string, UINT>(tokens[6]);
+      src_type = FORUM;
+      dst_type = TOPIC;
+    } else if (tokens[4] != "") {
+      item     = encode<uint64_t, std::string, UINT>(tokens[4]);
+      topic    = encode<uint64_t, std::string, UINT>(tokens[6]);
+      src_type = FORUMEVENT;
+      dst_type = TOPIC;
+    } else {
+      item     = encode<uint64_t, std::string, UINT>(tokens[5]);
+      topic    = encode<uint64_t, std::string, UINT>(tokens[6]);
+      src_type = PUBLICATION;
+      dst_type = TOPIC;
+    } 
+  }
+
+  uint64_t key() { return item; }
+  uint64_t src() { return item; }
+  uint64_t dst() { return topic; }
 };
 
 class HasOrgEdge {
-  public:
-    uint64_t publication;      // vertex id
-    uint64_t organization;     // vertex id
-    TYPES    src_type;
-    TYPES    dst_type;
+public:
+  uint64_t publication;      // vertex id
+  uint64_t organization;     // vertex id
+  TYPES    src_type;
+  TYPES    dst_type;
 
-  public:
-    HasOrgEdge () {
-      publication  = kNullValue<uint64_t>;
-      organization = kNullValue<uint64_t>;
-      src_type     = NONE;
-      dst_type     = NONE;
-    }
+  HasOrgEdge () {
+    publication  = kNullValue<uint64_t>;
+    organization = kNullValue<uint64_t>;
+    src_type     = NONE;
+    dst_type     = NONE;
+  }
 
-    HasOrgEdge (std::vector <std::string> & tokens) {
-      publication  = encode<uint64_t, std::string, UINT>(tokens[5]);
-      organization = encode<uint64_t, std::string, UINT>(tokens[6]);
-      src_type     = PUBLICATION;
-      dst_type     = TOPIC;
-    }
+  HasOrgEdge (std::vector <std::string> & tokens) {
+    publication  = encode<uint64_t, std::string, UINT>(tokens[5]);
+    organization = encode<uint64_t, std::string, UINT>(tokens[6]);
+    src_type     = PUBLICATION;
+    dst_type     = TOPIC;
+  }
 
-    uint64_t key() { return publication; }
-    uint64_t src() { return publication; }
-    uint64_t dst() { return organization; }
+  uint64_t key() { return publication; }
+  uint64_t src() { return publication; }
+  uint64_t dst() { return organization; }
 };
 
 class NoneEdge {
@@ -415,6 +416,23 @@ struct Vertex {
   Vertex (TopicVertex& topic) {
     v_type = TOPIC;
     v = topic;
+  }
+
+  uint64_t id() {
+    switch (v_type) {
+    case PERSON:
+      return v.person.key();
+    case FORUMEVENT:
+      return v.forum_event.key();
+    case FORUM:
+      return v.forum.key();
+    case PUBLICATION:
+      return v.publication.key();
+    case TOPIC:
+      return v.topic.key();
+    case NONE:
+      return kNullValue<uint64_t>;
+    }
   }
 };
 
@@ -464,8 +482,67 @@ struct Edge {
     e_type = HASORG;
     e = has_org;
   }
+
+  uint64_t id() {
+    switch (e_type) {
+    case PURCHASE:
+      return e.purchase.key();
+    case SALE:
+      return e.sale.key();
+    case AUTHOR:
+      return e.author.key();
+    case INCLUDES:
+      return e.includes.key();
+    case HASTOPIC:
+      return e.has_topic.key();
+    case HASORG:
+      return e.has_org.key();
+    case NONE:
+      return kNullValue<uint64_t>;
+    }
+  }
+
+  uint64_t src() {
+    switch (e_type) {
+    case PURCHASE:
+      return e.purchase.src();
+    case SALE:
+      return e.sale.src();
+    case AUTHOR:
+      return e.author.src();
+    case INCLUDES:
+      return e.includes.src();
+    case HASTOPIC:
+      return e.has_topic.src();
+    case HASORG:
+      return e.has_org.src();
+    case NONE:
+      return kNullValue<uint64_t>;
+    }
+  }
+
+  uint64_t dst() {
+    switch (e_type) {
+    case PURCHASE:
+      return e.purchase.dst();
+    case SALE:
+      return e.sale.dst();
+    case AUTHOR:
+      return e.author.dst();
+    case INCLUDES:
+      return e.includes.dst();
+    case HASTOPIC:
+      return e.has_topic.dst();
+    case HASORG:
+      return e.has_org.dst();
+    case NONE:
+      return kNullValue<uint64_t>;
+    }
+  }
 };
 
-using LC_CSR_64_GRAPH = galois::graphs::LC_CSR_64_Graph<Vertex, Edge>::with_no_lockable<true>::type;
+using Graph = galois::graphs::LC_CSR_64_Graph<Vertex, Edge>::with_no_lockable<true>::type;
+
+}
 
 #endif
