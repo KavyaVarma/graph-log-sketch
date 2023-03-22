@@ -226,7 +226,7 @@
 //   waitForCompletion(handle);
 // }
 
-void WMD_pattern(wf2::Graph& graph) {
+// void WMD_pattern(wf2::Graph& graph) {
   // auto Forums_2 = intTimeMap::Create(TINY);     // for each forum, the earliest date of a included FE4 vertex
   // auto Persons  = PersonVertexType::GetPtr((PersonVertexOID) graph["Persons"]);
   // auto Includes = IncludesEdgeType::GetPtr((IncludesEdgeOID) graph["Includes"]);
@@ -238,4 +238,4 @@ void WMD_pattern(wf2::Graph& graph) {
 
   // // find all persons with the right financial transaction and forum event attendence
   // Persons->ForEachEntry(transEvents, args);
-}
+// }
