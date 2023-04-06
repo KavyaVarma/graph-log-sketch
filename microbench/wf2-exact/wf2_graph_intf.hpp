@@ -1,9 +1,12 @@
 #include <string>
 
 
-class WF2_Graph_API {
+template<typename Graph>
+class WF2_Graph {
+  Graph graph;
+
 public:
-  WF2_Graph_API(std::string filename);
+  WF2_Graph(Graph g) : graph(g) {}
 
   template<typename GraphElem>
   GraphElem lookup(uint64_t id) {
@@ -20,4 +23,7 @@ public:
     // call f on list of out-edges of vertex id with type EdgeType
   }
 
+  void print_graph(std::string filename) {
+    // print graph edges in sorted order
+  }
 };
