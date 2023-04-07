@@ -1,26 +1,31 @@
 import subprocess
 
-def run_wf2_exact(gmt_workers=1, gmt_uthreads=2, dataset="data.01.csv"):
+def run_wf2_exact(num_threads=1, dataset="data.01.csv"):
     bin_path = "./build/wf2_exact"
-    dataset_path = f"./graphs/{dataset}"
-    num_threads_arg = "-t"
-    time_str = "Graph_construction_time"
-    time = 0
+    dataset_opt = f"-f graphs/{dataset}"
+    num_threads_opt = f"-t {num_threads}"
+    const_time_str = "Graph construction time:"
+    match_time_str = "Pattern matching time:"
+    const_time = 0
+    match_time = 0
 
-    cmd = f"{bin_path} {num_threads_arg} {gmt_workers} {uthreads_arg} {gmt_uthreads} {dataset_path}"
-    output = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE).stdout
+    cmd = f"{bin_path} {dataset_opt} {num_threads_opt}"
+    output = subprocess.Popen(cmd, 
+            shell=True, 
+            stdout=subprocess.PIPE, 
+            stderr=subprocess.DEVNULL).stdout
     for line in output.readlines():
         line = line.decode("utf-8")
-        k1 = line.find(k1_str)
-        k3 = line.find(k3_str)
-        if k1 != -1:
-            k1 += len(k1_str)
-            k1_time = float(line[k1:])
-        elif k3 != -1:
-            k3 += len(k3_str)
-            k3_time = float(line[k3:])
+        t1 = line.find(const_time_str)
+        t2 = line.find(match_time_str)
+        if t1 != -1:
+            t1 += len(const_time_str)
+            const_time = float(line[t1:])
+        elif t2 != -1:
+            t2 += len(match_time_str)
+            match_time = float(line[t2:])
 
-    return (k1_time, k3_time)
+    return (const_time, match_time)
 
 
 def main():
@@ -28,37 +33,30 @@ def main():
     runs = int(input())
     print("Discard how many initial runs? ", end="")
     discard = int(input())
-    workers_range = [64, 128, 256]
-    uthreads_range = [16, 32, 64, 128, 256]
+    num_threads_range = [1, 4, 8, 16, 32, 64]
 
     runtimes = dict()
     counted_runs = runs - discard
-    for workers in workers_range:
-        for uthreads in uthreads_range:
-            total_uthreads = workers * uthreads
-            if total_uthreads < 2**12 or total_uthreads >= 2**15:
-                continue
+    for num_threads in num_threads_range:
+        print(f"Running setup (num_threads = {num_threads})...")
+        runtimes[num_threads] = (0, 0)
+        for i in range(runs):
+            t1, t2 = run_wf2_exact(num_threads=num_threads)
+            if i >= discard:
+                t1_sum, t2_sum = runtimes[num_threads]
+                runtimes[num_threads] = (t1 + t1_sum, t2 + t2_sum)
+            discarded_str = "\t (discarded)" if i < discard else ""
+            print(f"\tGraph Construction: {t1}, Pattern Matching: {t2} {discarded_str}")
 
-            print(f"Running setup (workers = {workers}, uthreads_per_worker = {uthreads})...")
-            runtimes[(workers, uthreads)] = (0, 0)
-            for i in range(runs):
-                k1, k3 = run_wf2_exact(gmt_workers=workers, gmt_uthreads=uthreads)
-                if i >= discard:
-                    k1_sum, k3_sum = runtimes[(workers, uthreads)]
-                    runtimes[(workers, uthreads)] = (k1 + k1_sum, k3 + k3_sum)
-                discarded_str = "\t (discarded)" if i < discard else ""
-                print(f"\tKernel 1: {k1}, Kernel 3: {k3} {discarded_str}")
-
-            k1, k3 = runtimes[(workers, uthreads)]
-            k1, k3 = k1 / counted_runs, k3 / counted_runs
-            print(f"\tKernel 1 avg: {k1:.6f}, Kernel 3 avg: {k3:.6f}, Total avg: {(k1 + k3):.6f}")
-            runtimes[(workers, uthreads)] = (k1, k3)
+        t1, t2 = runtimes[num_threads]
+        t1, t2 = t1 / counted_runs, t2 / counted_runs
+        print(f"\tGraph Construction Avg: {t1:.3f}, Pattern Matching Avg: {t2:.3f}, Total avg: {(t1 + t2):.3f}")
+        runtimes[num_threads] = (t1, t2)
 
     print("\nResults:")
-    for setup in runtimes:
-        workers, uthreads = setup
-        k1, k3 = runtimes[setup]
-        print(f"\"({workers}, {uthreads})\", {k1:.6f}, {k3:.6f}, {(k1 + k3):.6f}")
+    for num_threads in runtimes:
+        t1, t2 = runtimes[num_threads]
+        print(f"\"{num_threads} threads\", {t1:.3f}, {t2:.3f}, {(t1 + t2):.3f}")
 
 
 if __name__ == "__main__":

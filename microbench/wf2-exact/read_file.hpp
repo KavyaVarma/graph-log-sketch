@@ -88,7 +88,7 @@ WF2_Graph<Graph> read_file(std::string filename, GraphConstructor construct_grap
     }
   }
 
-  timer.lap("File read");
+  timer.lap("[read_file] File read");
 
   uint64_t num_nodes = vertices.size();
   uint64_t num_edges = edges.size();
@@ -101,7 +101,7 @@ WF2_Graph<Graph> read_file(std::string filename, GraphConstructor construct_grap
     id_to_node_index[id] = i;
   }
 
-  timer.lap("id_to_node_index map constructed");
+  timer.lap("[read_file] id_to_node_index map constructed");
 
   for (uint64_t i = 0; i < num_edges; i++) {
     uint64_t src_global_id = edges[i].src();
@@ -111,7 +111,7 @@ WF2_Graph<Graph> read_file(std::string filename, GraphConstructor construct_grap
     edge_list[src_id].push_back(std::make_pair(dst_id, i));
   }
 
-  timer.lap("edge_list constructed");
+  timer.lap("[read_file] edge_list constructed");
 
 //  Edge** edges_grouped = new Edge*[num_nodes];
 //  for (uint64_t n = 0; n < num_nodes; n++) {
@@ -125,14 +125,14 @@ WF2_Graph<Graph> read_file(std::string filename, GraphConstructor construct_grap
   Graph* graph = construct_graph(num_nodes, num_edges, edge_list, edges);
   delete [] edge_list;
 
-  timer.lap("graph constructed");
+  timer.lap("[read_file] graph constructed");
 
   for (uint64_t i = 0; i < num_nodes; i++) {
     Vertex& v = graph->getData(i);
     v = vertices[i];
   }
 
-  timer.lap("node data stored in graph");
+  timer.lap("[read_file] node data stored in graph");
 
   return WF2_Graph(graph, id_to_node_index);
 }

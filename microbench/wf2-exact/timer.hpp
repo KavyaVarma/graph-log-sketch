@@ -18,7 +18,7 @@ public:
     t0 = std::chrono::high_resolution_clock::now();
   }
 
-  void lap(std::string str) {
+  void lap(std::string str, bool display_units = false) {
     using namespace std;
     t1 = chrono::high_resolution_clock::now();
     auto diff_ns = chrono::duration<uint64_t, nano>(t1-t0);
@@ -26,7 +26,13 @@ public:
     uint64_t diff_sec_part = diff / 1000;
     uint64_t diff_ms_part = diff % 1000;
 
-    cout << str << " time: " << diff_sec_part << "." << diff_ms_part << " seconds" << endl;
+    cout << str << " time: " << diff_sec_part << "." << diff_ms_part;
+    if (display_units) {
+      cout << " seconds" << endl;
+    } else {
+      cout << endl;
+    }
+
     t0 = t1;
   }
 };
