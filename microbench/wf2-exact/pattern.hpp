@@ -69,6 +69,7 @@ bool forum_1_subpattern(uint64_t forum_event, std::set<uint64_t>& jihad_forums, 
 
   if (nyc_topic) {
     auto insert = jihad_forums.insert(fev.forum);
+    std::cout << "FROG" << fev.forum << std::endl;
     return !insert.second;
   }
 
@@ -139,6 +140,7 @@ bool electronics_subpattern(uint64_t seller_id, WF2_Graph<Graph>& g) {
               found = g.template lookup_node<TopicVertex>(o.organization, org_topic);
               if (found && proximity(org_topic, NYC)) {
                 match = true;
+                std::cout << "PANDA "<< pub.id << " " << org_topic.id << std::endl;
                 return;
               } 
             }
@@ -195,6 +197,8 @@ time_t transEvents(const std::vector<PurchaseEdge>& purchases, WF2_Graph<Graph>&
 
   time_t trans_date = std::min(std::min(latest_BB, latest_PC), latest_AMO); // list params?
   if (trans_date == 0 || !ESP) return 0;
+
+  std::cout << "GREEN" << latest_AMO << std::endl;
 
   return trans_date;
 }
@@ -278,6 +282,7 @@ void WMD_pattern(WF2_Graph<Graph>& g) {
       if (trans_date == 0) return;
 
       persons[person.id] = trans_date;
+      std::cout << "GIRAFFE " << person.id << std::endl;
     });
 
   // forumEvent_subpattern

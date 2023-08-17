@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.11)
 project(graph-log-sketch)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_BUILD_TYPE Debug)
 include_directories(include)
 Include(FetchContent)
 
@@ -12,6 +13,9 @@ FetchContent_Declare(
 )
 
 FetchContent_MakeAvailable(Catch2)
+
+set(GALOIS_ENABLE_DIST ON FORCE BOOL)
+set(GALOIS_USE_BARE_MPI ON BOOL)
 
 add_subdirectory(galois EXCLUDE_FROM_ALL)
 
@@ -26,6 +30,7 @@ add_executable(galois-jaccard-tests test/jaccard.cpp)
 add_executable(jaccard microbench/jaccard.cpp)
 add_executable(edit_scalability microbench/edit_scalability.cpp)
 add_executable(wf2_exact microbench/wf2-exact/main.cpp)
+add_executable(wf2_dist microbench/wf2-dist/main.cpp)
 add_executable(parallel-small-tests test/p_small_tests.cpp)
 target_link_libraries(small-tests PRIVATE Catch2::Catch2WithMain Galois::shmem)
 target_link_libraries(file-tests PRIVATE Catch2::Catch2WithMain Galois::shmem)
@@ -38,7 +43,8 @@ target_link_libraries(galois-jaccard-tests PRIVATE Catch2::Catch2WithMain Galois
 target_link_libraries(parallel-small-tests PRIVATE Catch2::Catch2WithMain Galois::shmem)
 target_link_libraries(jaccard PRIVATE Galois::shmem lonestar)
 target_link_libraries(edit_scalability PRIVATE Galois::shmem lonestar)
-target_link_libraries(wf2_exact PRIVATE Galois::shmem lonestar)
+target_link_libraries(wf2_exact PRIVATE galois_cusp Galois::shmem lonestar)
+target_link_libraries(wf2_dist PRIVATE galois_cusp galois_gluon distbench pangolin Galois::shmem lonestar)
 include(CTest)
 include(Catch)
 catch_discover_tests(small-tests)

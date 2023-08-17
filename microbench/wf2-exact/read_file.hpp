@@ -127,6 +127,38 @@ WF2_Graph<Graph> read_file(std::string filename, GraphConstructor construct_grap
 
   timer.lap("[read_file] graph constructed");
 
+  /*
+  Trying to write out the graph to a GR file
+  */
+  typedef galois::graphs::FileGraphWriter Writer;
+
+  Writer p;
+
+  p.setNumNodes(num_nodes);
+  p.setNumEdges<Edge>(num_edges);
+
+  p.phase1();
+
+  // Increment degree
+  for(auto e: edges) {
+    p.incrementDegree(id_to_node_index[e.src()]);
+  }
+
+  p.phase2();
+
+  // Add the neighbours
+  for(auto e: edges) {
+    p.addNeighbor<Edge>(id_to_node_index[e.src()], id_to_node_index[e.dst()], e);
+  }
+
+  std::string outfilename = std::string("./final_data.gr");
+
+  p.finish();
+  p.toFile(outfilename);
+
+
+  timer.lap("[write_file] write to file completed");  
+
   for (uint64_t i = 0; i < num_nodes; i++) {
     Vertex& v = graph->getData(i);
     v = vertices[i];

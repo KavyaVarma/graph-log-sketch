@@ -13,6 +13,7 @@
 #include "galois/DTerminationDetector.h"
 #include "galois/DistGalois.h"
 #include "galois/Galois.h"
+#include "galois/runtime/Network.h"
 #include "galois/Version.h"
 #include "galois/graphs/GenericPartitioners.h"
 #include "galois/graphs/GluonSubstrate.h"
@@ -23,11 +24,13 @@
 #include "llvm/Support/CommandLine.h"
 #include "pangolin/BfsMining/embedding_list.h"
 #include "pangolin/res_man.h"
+#include <mpi.h>
 
 #include <iostream>
 
 #define DEBUG 0
 #define BENCH 1
+#define NYC_TOPIC_ID 60
 
 // Command Line
 namespace cll = llvm::cl;
@@ -38,14 +41,12 @@ typedef galois::graphs::DistGraph<wf2::Vertex, wf2::Edge> Graph;
 typedef typename Graph::GraphNode PGNode;
 using DGAccumulatorTy = galois::DGAccumulator<uint64_t>;
 using GAccumulatorTy = galois::GAccumulator<uint64_t>;
-DGAccumulatorTy *global_num_tri_ptr;
-GAccumulatorTy *thread_num_tri_ptr;
 
 // ##################################################################
 //                      GLOBAL (aka host) VARS
 // ##################################################################
-galois::DynamicBitSet bitset_dests;
-galois::DynamicBitSet bitset_requested_edges;
+galois::DynamicBitSet bitset_sync1;
+galois::DynamicBitSet bitset_sync2;
 std::unique_ptr<galois::graphs::GluonSubstrate<Graph>> syncSubstrate;
 auto &net = galois::runtime::getSystemNetworkInterface();
 
@@ -58,10 +59,12 @@ std::shared_ptr<galois::substrate::SimpleLock> print_lock_ptr = std::make_shared
     TODO : How in the world do I get this as global information?
     Some type of global metadata type thing?
 */
+// lat + lon
+std::pair<double, double> nyc_loc;
 bool proximity_to_nyc(const wf2::TopicVertex &A)
 {
-    double lon_miles = 0.91 * std::abs(A.lon - (-73.94));
-    double lat_miles = 1.15 * std::abs(A.lat - 40.67);
+    double lon_miles = 0.91 * std::abs(A.lon - nyc_loc.second);
+    double lat_miles = 1.15 * std::abs(A.lat - nyc_loc.first);
     double distance = std::sqrt(lon_miles * lon_miles + lat_miles * lat_miles);
     return distance <= 30.0;
 }
@@ -185,6 +188,8 @@ struct SyncPhase1
         {
             node.v.forum_event.nyc_topic = node.v.forum_event.nyc_topic | y.v.forum_event.nyc_topic;
             node.v.forum_event.jihad_topic = node.v.forum_event.jihad_topic | y.v.forum_event.jihad_topic;
+            // if(node.v.forum_event.nyc_topic || node.v.forum_event.jihad_topic)
+            // bitset_sync1_broadcast.set(syncSubstrate-)
         }
         return true;
     }
@@ -223,6 +228,17 @@ struct SyncPhase1
     static bool setVal_batch(unsigned, uint8_t *, DataCommMode) { return false; }
 };
 
+struct BitsetPhase1
+{
+    static constexpr bool is_vector_bitset() { return false; }
+    static constexpr bool is_valid() { return true; }
+    static galois::DynamicBitSet &get() { return bitset_sync1; }
+    static void reset_range(size_t begin, size_t end)
+    {
+        bitset_sync1.reset(begin, end);
+    }
+};
+
 /*
     Sync the min time information -> reduce + broadcast
     Sync the Jihad information to all forum events -> reduce broadcast -> reduce + broadcast
@@ -247,7 +263,8 @@ struct SyncPhase2
                 node.v.forum_event.forum_min_time = y.v.forum_event.forum_min_time;
             }
             node.v.forum_event.jihad_topic = node.v.forum_event.jihad_topic | y.v.forum_event.jihad_topic;
-            node.v.forum_event.nyc_topic = node.v.forum_event.nyc_topic | y.v.forum_event.nyc_topic;;
+            node.v.forum_event.nyc_topic = node.v.forum_event.nyc_topic | y.v.forum_event.nyc_topic;
+            ;
         };
         return true;
     }
@@ -282,6 +299,17 @@ struct SyncPhase2
     static bool reduce_batch(unsigned, uint8_t *, DataCommMode) { return false; }
     static bool reduce_mirror_batch(unsigned, uint8_t *, DataCommMode) { return false; }
     static bool setVal_batch(unsigned, uint8_t *, DataCommMode) { return false; }
+};
+
+struct BitsetPhase2
+{
+    static constexpr bool is_vector_bitset() { return false; }
+    static constexpr bool is_valid() { return true; }
+    static galois::DynamicBitSet &get() { return bitset_sync2; }
+    static void reset_range(size_t begin, size_t end)
+    {
+        bitset_sync2.reset(begin, end);
+    }
 };
 
 /*
@@ -329,7 +357,7 @@ int main(int argc, char **argv)
     }
     std::unique_ptr<Graph> hg;
     std::tie(hg, syncSubstrate) = distGraphInitialization<wf2::Vertex, wf2::Edge>();
-    std::unordered_map<uint64_t, uint64_t> id_to_node_index = wf2::read_file<Graph, GNode>(*hg, "../graphs/data.01.csv");
+    std::unordered_map<uint64_t, uint64_t> id_to_node_index = wf2::read_file<Graph, GNode>(*hg, "/home/kvarma/work/graph-log-sketch-liam/graphs/data.01.csv");
 
     if (BENCH)
     {
@@ -339,9 +367,11 @@ int main(int argc, char **argv)
     }
 
     Graph &hg_ref = *hg;
+    bitset_sync1.resize(hg_ref.size());
+    bitset_sync2.resize(hg_ref.size());
 
     // TODO Fix this
-    uint32_t num_hosts = 2; // hg->numHosts;
+    uint32_t num_hosts = 4; // hg->num_hosts;
     uint64_t host_id = galois::runtime::getSystemNetworkInterface().ID;
 
     std::ofstream file;
@@ -367,6 +397,54 @@ int main(int argc, char **argv)
         std::cout << "Sync_Master_Mirror_Data, " << node_sync_end - node_sync_start << "\n";
     }
 
+    bool is_nyc_host = false;
+    galois::do_all(
+        galois::iterate(hg_ref.allNodesWithEdgesRange()),
+        [&](const GNode &gNode)
+        {
+            auto &node = hg_ref.getData(gNode);
+
+            if (node.v_type == wf2::TYPES::TOPIC && node.v.forum.id == NYC_TOPIC_ID)
+            {
+                is_nyc_host = true;
+                nyc_loc.first = node.v.topic.lat;
+                nyc_loc.second = node.v.topic.lon;
+                return;
+            }
+        },
+        galois::steal());
+
+    if (is_nyc_host)
+    {
+        std::cout << "Sending NYC information from " << galois::runtime::getHostID() << std::endl;
+        for (uint32_t h = 0; h < num_hosts; ++h)
+        {
+            if (h == host_id)
+                continue;
+
+            // serialize size_t
+            galois::runtime::SendBuffer sendBuffer;
+            galois::runtime::gSerialize(sendBuffer, nyc_loc);
+            net.sendTagged(h, galois::runtime::evilPhase, sendBuffer);
+        }
+    }
+    else
+    {
+        std::cout << "Waiting NYC information from " << galois::runtime::getHostID() << std::endl;
+        decltype(net.recieveTagged(galois::runtime::evilPhase, nullptr)) p;
+        do {
+            p = net.recieveTagged(galois::runtime::evilPhase, nullptr);
+        } while (!p);
+        uint32_t sendingHost = p->first;
+        // deserialize local_node_size
+        galois::runtime::gDeserialize(p->second, nyc_loc);
+        std::cout << "received " << p->first << " " << nyc_loc.first << std::endl;
+    }
+
+    std::cout << "REACHED HERE " << galois::runtime::getHostID() << is_nyc_host << " " << std::endl;
+
+    std::cout << galois::runtime::getHostID() << " " << galois::runtime::getSystemNetworkInterface().reportRecvMsgs() << std::endl;
+
     /*
         ForumEvent 2A + 2B + Jihad
         Identify Ammunition SubPattern
@@ -380,6 +458,7 @@ int main(int argc, char **argv)
         calculate_1_start = MPI_Wtime();
     }
 
+    bitset_sync1.reset();
     galois::do_all(
         galois::iterate(hg_ref.allNodesWithEdgesRange()),
         [&](const GNode &gNode)
@@ -397,7 +476,8 @@ int main(int argc, char **argv)
                 bool jihad_topic = false;
                 for (auto e : hg_ref.edges(gNode))
                 {
-                    auto &edge_node = hg_ref.getData(hg_ref.getEdgeDst(e));
+                    auto edge_dst = hg_ref.getEdgeDst(e);
+                    auto &edge_node = hg_ref.getData(edge_dst);
                     auto &edge_data = hg_ref.getEdgeData(e);
                     if (edge_node.v_type == wf2::TYPES::TOPIC)
                     {
@@ -411,7 +491,8 @@ int main(int argc, char **argv)
                             topic_2B_2 = true;
                         if (edge_node.id() == 127197)
                             topic_2B_3 = true;
-                        if (edge_node.id() == 44311) {
+                        if (edge_node.id() == 44311)
+                        {
                             jihad_topic = true;
                         }
                     }
@@ -419,12 +500,18 @@ int main(int argc, char **argv)
                 if (topic_2A_1 && topic_2A_2)
                 {
                     node.v.forum_event.forum2A = true;
+                    bitset_sync1.set(hg_ref.getLID(gNode));
                 }
                 if (topic_2B_1 && topic_2B_2 && topic_2B_3)
                 {
                     node.v.forum_event.forum2B = true;
+                    bitset_sync1.set(hg_ref.getLID(gNode));
                 }
-                node.v.forum_event.jihad_topic = jihad_topic;
+                if (jihad_topic)
+                {
+                    node.v.forum_event.jihad_topic = jihad_topic;
+                    bitset_sync1.set(hg_ref.getLID(gNode));
+                }
             }
 
             // Ammunition Subpattern -> altering master nodes
@@ -443,7 +530,10 @@ int main(int argc, char **argv)
                     }
                 }
                 if (buyers.size() > 1)
+                {
                     node.v.person.ammo_sp = true;
+                    bitset_sync1.set(gNode);
+                }
             }
 
             // Publication affiliated with organizations close to NYC -> altering master nodes
@@ -457,15 +547,22 @@ int main(int argc, char **argv)
                     if (edge_node.v_type == wf2::TYPES::TOPIC)
                     {
                         if (proximity_to_nyc(edge_node.v.topic))
+                        {
                             node.v.publication.has_org_near_nyc = true;
+                            bitset_sync1.set(hg_ref.getLID(gNode));
+                        }
                         if (edge_node.id() == 43035)
+                        {
                             node.v.publication.ee_topic = true;
+                            bitset_sync1.set(hg_ref.getLID(gNode));
+                        }
                     }
                 }
             }
-        
+
             // Forum is NYC type -> altering mirror nodes
-            if (node.v_type == wf2::TYPES::FORUM) {
+            if (node.v_type == wf2::TYPES::FORUM)
+            {
                 bool has_nyc_topic = false;
                 for (auto e : hg_ref.edges(gNode))
                 {
@@ -474,7 +571,8 @@ int main(int argc, char **argv)
 
                     if (edge_node.v_type == wf2::TYPES::TOPIC)
                     {
-                        if (edge_node.id() == 60) {
+                        if (edge_node.id() == 60)
+                        {
                             has_nyc_topic = true;
                         }
                     }
@@ -482,12 +580,14 @@ int main(int argc, char **argv)
 
                 for (auto e : hg_ref.edges(gNode))
                 {
-                    auto &edge_node = hg_ref.getData(hg_ref.getEdgeDst(e));
+                    auto edge_dst = hg_ref.getEdgeDst(e);
+                    auto &edge_node = hg_ref.getData(edge_dst);
                     auto edge_data = hg_ref.getEdgeData(e);
 
                     if (edge_node.v_type == wf2::TYPES::FORUMEVENT)
                     {
                         edge_node.v.forum_event.nyc_topic = has_nyc_topic;
+                        bitset_sync1.set(edge_dst);
                     }
                 }
             }
@@ -513,8 +613,7 @@ int main(int argc, char **argv)
         sync_1_start = MPI_Wtime();
     }
 
-    syncSubstrate->sync<writeDestination, readSource, SyncPhase1>("Sync_1_Reduce");
-    syncSubstrate->sync<writeSource, readDestination, SyncPhase1>("Sync_1_Broadcast");
+    syncSubstrate->sync<writeAny, readAny, SyncPhase1, BitsetPhase1>("Sync_1");
 
     if (BENCH)
     {
@@ -534,6 +633,7 @@ int main(int argc, char **argv)
         calculate_2_start = MPI_Wtime();
     }
 
+    bitset_sync2.reset();
     galois::do_all(
         galois::iterate(hg_ref.allNodesWithEdgesRange()),
         [&](const GNode &gNode)
@@ -564,13 +664,21 @@ int main(int argc, char **argv)
                 if (has_2a_event == true)
                 {
                     // TODO - do we need this line below??
-                    node.v.forum.min_time = min_time;
+                    if (min_time != 0)
+                    {
+                        node.v.forum.min_time = min_time;
+                        bitset_sync2.set(gNode);
+                    }
+
                     for (auto e : hg_ref.edges(gNode))
                     {
-                        auto &edge_node = hg_ref.getData(hg_ref.getEdgeDst(e));
+                        auto edge_dst = hg_ref.getEdgeDst(e);
+                        auto &edge_node = hg_ref.getData(edge_dst);
                         auto &edge_data = hg_ref.getEdgeData(e);
                         if (edge_node.v_type == wf2::TYPES::FORUMEVENT)
                         {
+                            if (min_time != 0 || has_jihad_topic || has_nyc_topic)
+                                bitset_sync2.set(edge_dst);
                             edge_node.v.forum_event.forum_min_time = min_time;
                             edge_node.v.forum_event.jihad_topic = has_jihad_topic;
                             edge_node.v.forum_event.nyc_topic = has_nyc_topic;
@@ -589,7 +697,10 @@ int main(int argc, char **argv)
                     if (edge_data.e_type == wf2::TYPES::AUTHOR && edge_node.v_type == wf2::TYPES::PUBLICATION)
                     {
                         if (edge_node.v.publication.has_org_near_nyc && edge_node.v.publication.ee_topic)
+                        {
                             node.v.person.ee_sp = true;
+                            bitset_sync2.set(gNode);
+                        }
                     }
                 }
             }
@@ -613,8 +724,7 @@ int main(int argc, char **argv)
         sync_2_start = MPI_Wtime();
     }
 
-    syncSubstrate->sync<writeDestination, readSource, SyncPhase2>("Sync_2_Reduce");
-    syncSubstrate->sync<writeSource, readDestination, SyncPhase2>("Sync_2_Broadcast");
+    syncSubstrate->sync<writeAny, readAny, SyncPhase2, BitsetPhase2>("Sync_2");
 
     if (BENCH)
     {
@@ -690,9 +800,11 @@ int main(int argc, char **argv)
                     {
                         auto &edge_node = hg_ref.getData(hg_ref.getEdgeDst(e));
                         auto &edge_data = hg_ref.getEdgeData(e);
-                        if (edge_data.e_type == wf2::TYPES::AUTHOR && edge_node.v_type == wf2::TYPES::FORUMEVENT) {
-                            if(edge_node.v.forum_event.jihad_topic && edge_node.v.forum_event.nyc_topic) {
-                                if(edge_node.v.forum_event.forum_min_time != 0 && edge_node.v.forum_event.forum_min_time < trans_date)
+                        if (edge_data.e_type == wf2::TYPES::AUTHOR && edge_node.v_type == wf2::TYPES::FORUMEVENT)
+                        {
+                            if (edge_node.v.forum_event.jihad_topic && edge_node.v.forum_event.nyc_topic)
+                            {
+                                if (edge_node.v.forum_event.forum_min_time != 0 && edge_node.v.forum_event.forum_min_time < trans_date)
                                     std::cout << "Found a person " << node.id() << " !!\n\n\n\n";
                             }
                         }
